@@ -1,0 +1,20 @@
+{
+  "name": "telegram-users-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot for fetching user data and providing Excel downloads",
+  "main": "bot.js",
+  "type": "module",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "nodemon bot.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1",
+    "moment": "^2.29.4",
+    "node-cron": "^3.0.3",
+    "node-telegram-bot-api": "^0.64.0",
+    "nodemon": "^3.0.1",
+    "xlsx": "^0.18.5"
+  }
+}
