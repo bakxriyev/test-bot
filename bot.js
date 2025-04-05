@@ -7,7 +7,6 @@ import moment from 'moment'
 import fs from 'fs'
 import path from 'path'
 import cron from 'node-cron'
-import xlsx from 'xlsx'
 
 // Konfiguratsiya
 const token = process.env.TELEGRAM_BOT_TOKEN
@@ -90,40 +89,73 @@ async function checkWebsites() {
   return results
 }
 
-// Excel faylini yaratish
-async function createExcelFile() {
+// Text faylini yaratish
+// Text faylini yaratish (jadval ko‘rinishida)
+// Text faylini yaratish (jadval formatida)
+// Text faylini yaratish (jadval formatida)
+async function createTextFile() {
   try {
-    const response = await axios.get(`${backendUrl}/users`)
-    const users = response.data
-    
-    // Excel faylini yaratish
-    const wb = xlsx.utils.book_new()
-    const ws = xlsx.utils.json_to_sheet(users)
-    xlsx.utils.book_append_sheet(wb, ws, "Foydalanuvchilar")
-    
-    // Vaqtinchalik fayl nomi
-    const excelFileName = `users_${moment().format('DDMMYYYY_HHmmss')}.xlsx`
-    const tempFilePath = path.join(process.cwd(), excelFileName)
-    
-    // Faylni saqlash
-    xlsx.writeFile(wb, tempFilePath)
-    
+    console.log("API dan foydalanuvchilar ma'lumotlari olinmoqda...");
+    const response = await axios.get(`${backendUrl}/users`, {
+      timeout: 30000,
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    });
+
+    if (!response.data || !Array.isArray(response.data)) {
+      throw new Error("API dan noto'g'ri formatda ma'lumot qaytmoqda");
+    }
+
+    const users = response.data;
+    console.log(`API dan qaytgan foydalanuvchilar soni: ${users.length}`);
+
+    // Text fayl nomi va yo‘li
+    const textFileName = `users_${moment().format('DDMMYYYY_HHmmss')}.txt`;
+    const tempFilePath = path.join(process.cwd(), textFileName);
+
+    // Jadval sarlavhasi
+    let fileContent = `📋 Foydalanuvchilar ro'yxati (${moment().format('DD.MM.YYYY HH:mm:ss')})\n`;
+    fileContent += `Jami foydalanuvchilar: ${users.length}\n\n`;
+
+    fileContent += `|  №  |      ID      |       Ism       |    Tel raqam    |     TG username     |\n`;
+    fileContent += `|-----|--------------|-----------------|------------------|----------------------|\n`;
+
+    users.forEach((user, index) => {
+      const id = user.id || 'N/A';
+      const name = user.full_name || 'N/A';
+      const phone = user.phone_number || 'N/A';
+      const tg_user = user.tg_user || 'N/A';
+
+      // Har bir ustunni aniqlik bilan formatlab yozamiz
+      fileContent += `| ${String(index + 1).padEnd(3)} | ${String(id).padEnd(12)} | ${name.padEnd(15)} | ${phone.padEnd(16)} | ${tg_user.padEnd(20)} |\n`;
+    });
+
+    // Faylga yozish
+    fs.writeFileSync(tempFilePath, fileContent, 'utf8');
+
+    // Fayl hajmini ko‘rish
+    const stats = fs.statSync(tempFilePath);
+    console.log(`✅ Text fayl yaratildi (${(stats.size / (1024 * 1024)).toFixed(2)} MB)`);
+
     return {
       path: tempFilePath,
       usersCount: users.length
-    }
-    
+    };
+
   } catch (err) {
-    console.error('Excel fayli bilan ishlashda xato:', err)
-    throw err
+    console.error("❌ Text fayl yaratishda xatolik:", err.message);
+    throw err;
   }
 }
+ 
 
 // Chiroyli formatdagi xabar yaratish
 function createMessage(usersCount, websiteResults) {
   const currentTime = moment().format("HH:mm:ss DD.MM.YYYY")
   
-  let messageText = `📊 *Avtomatik hisobot* (${currentTime})\n\n`
+  let messageText = `📊 *15 minutlik avtomatik hisobot* (${currentTime})\n\n`
   messageText += `👥 *Foydalanuvchilar soni:* ${usersCount}\n\n`
   messageText += `🌐 *Saytlar holati:*\n`
   
@@ -134,33 +166,45 @@ function createMessage(usersCount, websiteResults) {
     messageText += `URL: ${site.url}\n`
   })
   
-  messageText += `\n📎 Quyida Excel fayli bilan tanishishingiz mumkin`
+  messageText += `\n📎 Quyida to'liq foydalanuvchilar ro'yxati bilan tanishishingiz mumkin`
   
   return messageText
 }
 
 // Xabarni barcha chatlarga jo'natish
-async function sendToAllChats(messageText, excelPath) {
+async function sendToAllChats(messageText, filePath) {
   for (const chatId of allChatIds) {
     try {
+      // Fayl hajmini tekshirish
+      const stats = fs.statSync(filePath);
+      if (stats.size === 0) {
+        throw new Error("Text fayli bo'sh yaratilgan");
+      }
+
+      console.log(`Xabar jo'natilmoqda ${chatId} ga...`);
+      
       // Xabarni jo'natish
       await bot.sendMessage(chatId, messageText, { 
         parse_mode: "Markdown",
         disable_web_page_preview: true
-      })
+      });
       
-      // Excel faylni jo'natish
-      await bot.sendDocument(chatId, excelPath)
+      // Faylni jo'natish
+      const fileStream = fs.createReadStream(filePath);
+      await bot.sendDocument(chatId, fileStream, {}, {
+        filename: path.basename(filePath),
+        contentType: 'text/plain'
+      });
       
-      console.log(`Xabar muvaffaqiyatli jo'natildi: ${chatId}`)
+      console.log(`Xabar muvaffaqiyatli jo'natildi: ${chatId}`);
     } catch (error) {
-      console.error(`${chatId} ga xabar jo'natishda xato:`, error)
+      console.error(`${chatId} ga xabar jo'natishda xato:`, error);
       
       // Agar bot kanal/guruhdan chiqarilgan bo'lsa
       if (error.response?.statusCode === 403) {
-        allChatIds.delete(chatId)
-        saveChatIds()
-        console.log(`Chat ${chatId} ro'yxatdan o'chirildi`)
+        allChatIds.delete(chatId);
+        saveChatIds();
+        console.log(`Chat ${chatId} ro'yxatdan o'chirildi`);
       }
     }
   }
@@ -183,7 +227,6 @@ bot.onText(/\/join (.+)/, (msg, match) => {
   const chatId = msg.chat.id
   const channelId = match[1]
   
-  
   allChatIds.add(channelId)
   saveChatIds()
   bot.sendMessage(chatId, `✅ Kanal (ID: ${channelId}) ro'yxatga qo'shildi!`)
@@ -199,8 +242,8 @@ bot.onText(/\/malumot/, async (msg) => {
     // Saytlar holatini tekshirish
     const websiteResults = await checkWebsites()
     
-    // Excel faylini yaratish
-    const { path: excelPath, usersCount } = await createExcelFile()
+    // Text faylini yaratish
+    const { path: filePath, usersCount } = await createTextFile()
     
     // Xabar matnini yaratish
     const messageText = createMessage(usersCount, websiteResults)
@@ -210,10 +253,16 @@ bot.onText(/\/malumot/, async (msg) => {
       parse_mode: "Markdown",
       disable_web_page_preview: true
     })
-    await bot.sendDocument(chatId, excelPath)
+    
+    // Faylni jo'natish
+    const fileStream = fs.createReadStream(filePath)
+    await bot.sendDocument(chatId, fileStream, {}, {
+      filename: path.basename(filePath),
+      contentType: 'text/plain'
+    })
     
     // Faylni o'chirish
-    fs.unlink(excelPath, (err) => {
+    fs.unlink(filePath, (err) => {
       if (err) console.error('Faylni o\'chirishda xato:', err)
     })
     
@@ -236,17 +285,17 @@ cron.schedule('*/15 * * * *', async () => {
     // Saytlar holatini tekshirish
     const websiteResults = await checkWebsites()
     
-    // Excel faylini yaratish
-    const { path: excelPath, usersCount } = await createExcelFile()
+    // Text faylini yaratish
+    const { path: filePath, usersCount } = await createTextFile()
     
     // Xabar matnini yaratish
     const messageText = createMessage(usersCount, websiteResults)
     
     // Barcha chatlarga jo'natish
-    await sendToAllChats(messageText, excelPath)
+    await sendToAllChats(messageText, filePath)
     
     // Faylni o'chirish
-    fs.unlink(excelPath, (err) => {
+    fs.unlink(filePath, (err) => {
       if (err) console.error('Faylni o\'chirishda xato:', err)
     })
     
