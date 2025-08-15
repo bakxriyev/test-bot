@@ -15,14 +15,14 @@ if (!token) {
   process.exit(1)
 }
 
-const backendUrl = "https://backend.imanakhmedovna.uz"
+const backendUrl = "https://orqa.imanakhmedovna.uz"
 const CHAT_IDS_FILE = path.join(process.cwd(), 'chat_ids.json')
 
 // Saytlar ro'yxati
 const websites = [
-  { name: "Dangasalik", url: "https://dangasalikni-yengish.imanakhmedovna.uz" },
-  { name: "Maqsadlarga erishish", url: "https://maqsadlarga-erishish.imanakhmedovna.uz" },
-  { name: "Intizom", url: "https://intizomni.shakillantirish.imanakhmedovna.uz" }
+  { name: "Birinchi", url: "https://birinchi.imanakhmedovna.uz" },
+  { name: "Ikkinchi", url: "https://ikkinchi.imanakhmedovna.uz" },
+  { name: "Uchunchi", url: "https://uchinchi.imanakhmedovna.uz/" }
 ]
 
 // Botni ishga tushirish
@@ -78,7 +78,7 @@ async function checkWebsites() {
     } catch (err) {
       results.push({
         name: site.name,
-        status: '❌ Ishlayotmayapti',
+        status: '❌ Ishlamayabdi',
         responseTime: 'N/A',
         url: site.url,
         error: err.message
