@@ -20,7 +20,7 @@ const CHAT_IDS_FILE = path.join(process.cwd(), 'chat_ids.json')
 
 // Saytlar ro'yxati
 const websites = [
-  { name: "Obshiy", url: "https://imanakhmedovna.uz" }
+  { name: "Obshiy", url: "https://imanakhmedovna.uz"},
   { name: "Birinchi", url: "https://birinchi.imanakhmedovna.uz" },
   { name: "Ikkinchi", url: "https://ikkinchi.imanakhmedovna.uz" },
   { name: "Uchunchi", url: "https://uchinchi.imanakhmedovna.uz/" }
