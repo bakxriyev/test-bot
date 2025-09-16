@@ -271,6 +271,58 @@ bot.onText(/\/malumot/, async (msg) => {
   }
 })
 
+// --- Yangi komanda: /statistika ---
+// Sanalar bo‘yicha ro‘yxatdan o‘tganlar sonini chiqaradi
+bot.onText(/\/statistika/, async (msg) => {
+  const chatId = msg.chat.id;
+
+  try {
+    const loadingMsg = await bot.sendMessage(chatId, "📊 Statistika yuklanmoqda...");
+
+    // API orqali foydalanuvchilarni olish
+    const response = await axios.get(`${backendUrl}/users`, {
+      timeout: 30000,
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    });
+
+    if (!response.data || !Array.isArray(response.data)) {
+      throw new Error("API noto‘g‘ri ma’lumot qaytardi");
+    }
+
+    const users = response.data;
+
+    // Sanalar bo‘yicha guruhlash
+    const stats = {};
+    users.forEach(user => {
+      // createdAt maydonidan foydalanamiz
+      const date = moment(user.createdAt).format("DD.MM.YYYY");
+      stats[date] = (stats[date] || 0) + 1;
+    });
+
+    // Statistika matnini yaratish
+    let statText = `📅 *Ro‘yxatdan o‘tganlar statistikasi*\n\n`;
+    Object.keys(stats)
+      .sort((a, b) => moment(a, "DD.MM.YYYY") - moment(b, "DD.MM.YYYY"))
+      .forEach(date => {
+        statText += `🔹 ${date}: ${stats[date]} ta odam\n`;
+      });
+
+    // Yuklanmoqda xabarini o‘chirib tashlash
+    await bot.deleteMessage(chatId, loadingMsg.message_id);
+
+    // Statistika xabarini yuborish
+    await bot.sendMessage(chatId, statText, { parse_mode: "Markdown" });
+
+  } catch (error) {
+    console.error("❌ Statistika olishda xato:", error.message);
+    bot.sendMessage(chatId, "⚠️ Statistika olishda xatolik yuz berdi. Iltimos, keyinroq qayta urinib ko‘ring.");
+  }
+});
+
+
 // Har 15 daqiqada avtomatik xabar
 cron.schedule('*/15 * * * *', async () => {
   console.log('15 minutlik avtomatik xabar yuborilmoqda...', new Date().toLocaleString())
