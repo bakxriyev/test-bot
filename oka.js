@@ -15,12 +15,12 @@ if (!token) {
   process.exit(1)
 }
 
-const backendUrl = "https://backend.buyuk-zamon.uz"
+const backendUrl = "https://backend.madinafayzullayevna.uz"
 const CHAT_IDS_FILE = path.join(process.cwd(), 'chat_ids.json')
 
 // Saytlar ro'yxati
 const websites = [
-  { name: "Sayt", url: "https://buyuk-zamon.uz"},
+  { name: "Sayt", url: "https://backend.madinafayzullayevna.uz"},
   
 ]
 
