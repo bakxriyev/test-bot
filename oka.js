@@ -20,7 +20,7 @@ const CHAT_IDS_FILE = path.join(process.cwd(), 'chat_ids.json')
 
 // Saytlar ro'yxati
 const websites = [
-  { name: "Sayt", url: "https://backend.madinafayzullayevna.uz"},
+  { name: "Sayt", url: "https://madinafayzullayevna.uz"},
   
 ]
 
