@@ -7,6 +7,7 @@ import moment from 'moment'
 import fs from 'fs'
 import path from 'path'
 import cron from 'node-cron'
+import XLSX from 'xlsx'
 
 // Konfiguratsiya
 const token = process.env.TELEGRAM_BOT_TOKEN
@@ -15,15 +16,12 @@ if (!token) {
   process.exit(1)
 }
 
-const backendUrl = "https://orqa.imanakhmedovna.uz"
+const backendUrl = "https://backend.imanakhmedovna.uz"
 const CHAT_IDS_FILE = path.join(process.cwd(), 'chat_ids.json')
 
 // Saytlar ro'yxati
 const websites = [
-  { name: "Obshiy", url: "https://imanakhmedovna.uz"},
-  { name: "Birinchi", url: "https://birinchi.imanakhmedovna.uz" },
-  { name: "Ikkinchi", url: "https://ikkinchi.imanakhmedovna.uz" },
-  { name: "Uchunchi", url: "https://uchinchi.imanakhmedovna.uz/" }
+  { name: "Sayt", url: "https://imanakhmedovna.uz"},
 ]
 
 // Botni ishga tushirish
@@ -32,7 +30,6 @@ const bot = new TelegramBot(token, { polling: true })
 // Barcha chat ID'larni saqlash uchun
 const allChatIds = new Set()
 
-// JSON faylni avtomatik yaratish va yuklash
 function initChatIdsFile() {
   try {
     if (!fs.existsSync(CHAT_IDS_FILE)) {
@@ -42,14 +39,12 @@ function initChatIdsFile() {
     
     const data = JSON.parse(fs.readFileSync(CHAT_IDS_FILE, 'utf8'))
     data.forEach(id => allChatIds.add(id))
-    console.log(`${data.length} ta chat ID yuklandi (guruhlar, kanallar, shaxsiy chatlar)`)
-    
+    console.log(`${data.length} ta chat ID yuklandi`)
   } catch (err) {
     console.error('Chat ID fayli bilan ishlashda xato:', err)
   }
 }
 
-// Chat ID'larni JSON faylga saqlash
 function saveChatIds() {
   try {
     const ids = Array.from(allChatIds)
@@ -60,7 +55,7 @@ function saveChatIds() {
   }
 }
 
-// Saytlar holatini tekshirish
+// === Sayt holatini tekshirish ===
 async function checkWebsites() {
   const results = []
   
@@ -90,222 +85,143 @@ async function checkWebsites() {
   return results
 }
 
-// Text faylini yaratish
-// Text faylini yaratish (jadval ko‘rinishida)
-// Text faylini yaratish (jadval formatida)
-// Text faylini yaratish (jadval formatida)
+// === Text fayl yaratish ===
 async function createTextFile() {
-  try {
-    console.log("API dan foydalanuvchilar ma'lumotlari olinmoqda...");
-    const response = await axios.get(`${backendUrl}/users`, {
-      timeout: 30000,
-      headers: {
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      }
-    });
+  const response = await axios.get(`${backendUrl}/user`)
+  const users = response.data
 
-    if (!response.data || !Array.isArray(response.data)) {
-      throw new Error("API dan noto'g'ri formatda ma'lumot qaytmoqda");
-    }
+  const textFileName = `users_${moment().format('DDMMYYYY_HHmmss')}.txt`
+  const tempFilePath = path.join(process.cwd(), textFileName)
 
-    const users = response.data;
-    console.log(`API dan qaytgan foydalanuvchilar soni: ${users.length}`);
+  let fileContent = `📋 Foydalanuvchilar ro'yxati (${moment().format('DD.MM.YYYY HH:mm:ss')})\n`
+  fileContent += `Jami foydalanuvchilar: ${users.length}\n\n`
 
-    // Text fayl nomi va yo‘li
-    const textFileName = `users_${moment().format('DDMMYYYY_HHmmss')}.txt`;
-    const tempFilePath = path.join(process.cwd(), textFileName);
+  fileContent += `|  №  |      ID      |       Ism       |    Tel raqam    |     TG username     |\n`
+  fileContent += `|-----|--------------|-----------------|------------------|----------------------|\n`
 
-    // Jadval sarlavhasi
-    let fileContent = `📋 Foydalanuvchilar ro'yxati (${moment().format('DD.MM.YYYY HH:mm:ss')})\n`;
-    fileContent += `Jami foydalanuvchilar: ${users.length}\n\n`;
-
-    fileContent += `|  №  |      ID      |       Ism       |    Tel raqam    |     TG username     |\n`;
-    fileContent += `|-----|--------------|-----------------|------------------|----------------------|\n`;
-
-    users.forEach((user, index) => {
-      const id = user.id || 'N/A';
-      const name = user.full_name || 'N/A';
-      const phone = user.phone_number || 'N/A';
-      const tg_user = user.tg_user || 'N/A';
-
-      // Har bir ustunni aniqlik bilan formatlab yozamiz
-      fileContent += `| ${String(index + 1).padEnd(3)} | ${String(id).padEnd(12)} | ${name.padEnd(15)} | ${phone.padEnd(16)} | ${tg_user.padEnd(20)} |\n`;
-    });
-
-    // Faylga yozish
-    fs.writeFileSync(tempFilePath, fileContent, 'utf8');
-
-    // Fayl hajmini ko‘rish
-    const stats = fs.statSync(tempFilePath);
-    console.log(`✅ Text fayl yaratildi (${(stats.size / (1024 * 1024)).toFixed(2)} MB)`);
-
-    return {
-      path: tempFilePath,
-      usersCount: users.length
-    };
-
-  } catch (err) {
-    console.error("❌ Text fayl yaratishda xatolik:", err.message);
-    throw err;
-  }
-}
- 
-
-// Chiroyli formatdagi xabar yaratish
-function createMessage(usersCount, websiteResults) {
-  const currentTime = moment().format("HH:mm:ss DD.MM.YYYY")
-  
-  let messageText = `📊 *15 minutlik avtomatik hisobot* (${currentTime})\n\n`
-  messageText += `👥 *Foydalanuvchilar soni:* ${usersCount}\n\n`
-  messageText += `🌐 *Saytlar holati:*\n`
-  
-  websiteResults.forEach(site => {
-    messageText += `\n🔹 *${site.name}*\n`
-    messageText += `Status: ${site.status}\n`
-    messageText += `Javob vaqti: ${site.responseTime}\n`
-    messageText += `URL: ${site.url}\n`
+  users.forEach((user, index) => {
+    const id = user.id || 'N/A'
+    const name = user.full_name || 'N/A'
+    const phone = user.phone_number || 'N/A'
+    const tg_user = user.tg_user || 'N/A'
+    fileContent += `| ${String(index + 1).padEnd(3)} | ${String(id).padEnd(12)} | ${name.padEnd(15)} | ${phone.padEnd(16)} | ${tg_user.padEnd(20)} |\n`
   })
-  
-  messageText += `\n📎 Quyida to'liq foydalanuvchilar ro'yxati bilan tanishishingiz mumkin`
-  
-  return messageText
-}
 
-// Xabarni barcha chatlarga jo'natish
-async function sendToAllChats(messageText, filePath) {
-  for (const chatId of allChatIds) {
-    try {
-      // Fayl hajmini tekshirish
-      const stats = fs.statSync(filePath);
-      if (stats.size === 0) {
-        throw new Error("Text fayli bo'sh yaratilgan");
-      }
+  fs.writeFileSync(tempFilePath, fileContent, 'utf8')
 
-      console.log(`Xabar jo'natilmoqda ${chatId} ga...`);
-      
-      // Xabarni jo'natish
-      await bot.sendMessage(chatId, messageText, { 
-        parse_mode: "Markdown",
-        disable_web_page_preview: true
-      });
-      
-      // Faylni jo'natish
-      const fileStream = fs.createReadStream(filePath);
-      await bot.sendDocument(chatId, fileStream, {}, {
-        filename: path.basename(filePath),
-        contentType: 'text/plain'
-      });
-      
-      console.log(`Xabar muvaffaqiyatli jo'natildi: ${chatId}`);
-    } catch (error) {
-      console.error(`${chatId} ga xabar jo'natishda xato:`, error);
-      
-      // Agar bot kanal/guruhdan chiqarilgan bo'lsa
-      if (error.response?.statusCode === 403) {
-        allChatIds.delete(chatId);
-        saveChatIds();
-        console.log(`Chat ${chatId} ro'yxatdan o'chirildi`);
-      }
-    }
+  return {
+    path: tempFilePath,
+    usersCount: users.length
   }
 }
+
+// === Kunlik lidlar uchun text + excel yaratish ===
+async function createDailyLeadsFiles() {
+  const response = await axios.get(`${backendUrl}/user`)
+  const users = response.data
+
+  // Bugungi sana
+  const today = moment().format("YYYY-MM-DD")
+  const todayUsers = users.filter(u => moment(u.createdAt).format("YYYY-MM-DD") === today)
+
+  // 1. TEXT fayl
+  const textPath = path.join(process.cwd(), `daily_leads_${moment().format('DDMMYYYY')}.txt`)
+  let content = `📅 Bugungi (${moment().format('DD.MM.YYYY')}) ro'yxatdan o‘tgan foydalanuvchilar\n`
+  content += `Jami: ${todayUsers.length} ta\n\n`
+
+  todayUsers.forEach((u, i) => {
+    content += `${i + 1}. ${u.full_name || 'N/A'} | ${u.phone_number || 'N/A'} | ${u.tg_user || 'N/A'}\n`
+  })
+  fs.writeFileSync(textPath, content, 'utf8')
+
+  // 2. EXCEL fayl
+  const excelPath = path.join(process.cwd(), `daily_leads_${moment().format('DDMMYYYY')}.xlsx`)
+  const sheetData = todayUsers.map((u, i) => ({
+  "№": i + 1,
+  "Ism": u.full_name || 'N/A',
+  "Telefon raqam": u.phone_number || 'N/A',
+  "TG username": u.tg_user || 'N/A',
+  "Ro‘yxatdan o‘tgan sana": moment(u.createdAt).format('DD.MM.YYYY HH:mm')
+}))
+
+  const wb = XLSX.utils.book_new()
+  const ws = XLSX.utils.json_to_sheet(sheetData)
+  XLSX.utils.book_append_sheet(wb, ws, "Daily Leads")
+  XLSX.writeFile(wb, excelPath)
+
+  return { textPath, excelPath, count: todayUsers.length }
+}
+
+// === /statistika komanda ===
+// === /statistika komanda ===
+bot.onText(/\/statistika/, async (msg) => {
+  const chatId = msg.chat.id
+
+  try {
+    const loadingMsg = await bot.sendMessage(chatId, "📊 Statistika tayyorlanmoqda...")
+
+    // Foydalanuvchilarni olish
+    const response = await axios.get(`${backendUrl}/user`)
+    const users = response.data
+
+    // Sanalar bo‘yicha guruhlash
+    const stats = {}
+    users.forEach(user => {
+      const date = moment(user.createdAt).format("DD.MM.YYYY")
+      stats[date] = (stats[date] || 0) + 1
+    })
+
+    // Sana bo‘yicha sortlash
+    const sortedStats = Object.keys(stats).sort(
+      (a, b) => moment(a, "DD.MM.YYYY") - moment(b, "DD.MM.YYYY")
+    )
+
+    // Matnli statistika
+    let statText = `📅 *Ro‘yxatdan o‘tganlar statistikasi*\n\n`
+    sortedStats.forEach(date => {
+      statText += `🔹 ${date}: ${stats[date]} ta odam\n`
+    })
+
+    // 📊 EXCEL fayl yaratish (kunlar bo‘yicha)
+    const excelData = sortedStats.map((date, i) => ({
+      "№": i + 1,
+      "Sana": date,
+      "Ro‘yxatdan o‘tganlar soni": stats[date],
+    }))
+
+    const excelPathStats = path.join(process.cwd(), `daily_stats_${moment().format("DDMMYYYY_HHmmss")}.xlsx`)
+    const wbStats = XLSX.utils.book_new()
+    const wsStats = XLSX.utils.json_to_sheet(excelData)
+    XLSX.utils.book_append_sheet(wbStats, wsStats, "Statistika")
+    XLSX.writeFile(wbStats, excelPathStats)
+
+    // Bugungi lidlar uchun fayllar
+    const { textPath, excelPath, count } = await createDailyLeadsFiles()
+
+    // Loading xabarini o‘chirish
+    await bot.deleteMessage(chatId, loadingMsg.message_id)
+
+    // Statistika matnini yuborish
+    await bot.sendMessage(chatId, `${statText}\n\n📆 Bugungi lidlar: ${count} ta`, { parse_mode: "Markdown" })
+
+    // Fayllarni yuborish
+    await bot.sendDocument(chatId, fs.createReadStream(excelPathStats))
+    await bot.sendDocument(chatId, fs.createReadStream(textPath))
+    await bot.sendDocument(chatId, fs.createReadStream(excelPath))
+
+    // Fayllarni o‘chirish
+    fs.unlink(excelPathStats, () => {})
+    fs.unlink(textPath, () => {})
+    fs.unlink(excelPath, () => {})
+
+  } catch (error) {
+    console.error("❌ Statistika olishda xato:", error)
+    bot.sendMessage(chatId, "⚠️ Statistika olishda xatolik yuz berdi. Iltimos, keyinroq qayta urinib ko‘ring.")
+  }
+})
+
 
 // Dastlabki sozlamalar
 initChatIdsFile()
 
-// Bot haqida ma'lumot
-let botInfo = null
-bot.getMe()
-  .then(info => {
-    botInfo = info
-    console.log("Bot ma'lumotlari:", botInfo)
-  })
-  .catch(err => console.error("Bot ma'lumotlarini olishda xato:", err))
-
-// Kanalga admin qilish uchun /join kanal_id buyrug'i
-bot.onText(/\/join (.+)/, (msg, match) => {
-  const chatId = msg.chat.id
-  const channelId = match[1]
-  
-  allChatIds.add(channelId)
-  saveChatIds()
-  bot.sendMessage(chatId, `✅ Kanal (ID: ${channelId}) ro'yxatga qo'shildi!`)
-})
-
-// /malumot buyrug'i
-bot.onText(/\/malumot/, async (msg) => {
-  const chatId = msg.chat.id
-  
-  try {
-    const loadingMsg = await bot.sendMessage(chatId, "⏳ Ma'lumotlar yuklanmoqda...")
-    
-    // Saytlar holatini tekshirish
-    const websiteResults = await checkWebsites()
-    
-    // Text faylini yaratish
-    const { path: filePath, usersCount } = await createTextFile()
-    
-    // Xabar matnini yaratish
-    const messageText = createMessage(usersCount, websiteResults)
-    
-    await bot.deleteMessage(chatId, loadingMsg.message_id)
-    await bot.sendMessage(chatId, messageText, { 
-      parse_mode: "Markdown",
-      disable_web_page_preview: true
-    })
-    
-    // Faylni jo'natish
-    const fileStream = fs.createReadStream(filePath)
-    await bot.sendDocument(chatId, fileStream, {}, {
-      filename: path.basename(filePath),
-      contentType: 'text/plain'
-    })
-    
-    // Faylni o'chirish
-    fs.unlink(filePath, (err) => {
-      if (err) console.error('Faylni o\'chirishda xato:', err)
-    })
-    
-  } catch (error) {
-    console.error("Xato:", error)
-    bot.sendMessage(chatId, "⚠️ Xatolik yuz berdi. Iltimos, keyinroq qayta urinib ko'ring.")
-  }
-})
-
-// Har 15 daqiqada avtomatik xabar
-cron.schedule('*/15 * * * *', async () => {
-  console.log('15 minutlik avtomatik xabar yuborilmoqda...', new Date().toLocaleString())
-  
-  if (allChatIds.size === 0) {
-    console.log('Xabar yuborish uchun chatlar mavjud emas')
-    return
-  }
-
-  try {
-    // Saytlar holatini tekshirish
-    const websiteResults = await checkWebsites()
-    
-    // Text faylini yaratish
-    const { path: filePath, usersCount } = await createTextFile()
-    
-    // Xabar matnini yaratish
-    const messageText = createMessage(usersCount, websiteResults)
-    
-    // Barcha chatlarga jo'natish
-    await sendToAllChats(messageText, filePath)
-    
-    // Faylni o'chirish
-    fs.unlink(filePath, (err) => {
-      if (err) console.error('Faylni o\'chirishda xato:', err)
-    })
-    
-  } catch (error) {
-    console.error("Avtomatik xabar yuborishda xato:", error)
-  }
-}, {
-  scheduled: true,
-  timezone: "Asia/Tashkent"
-})
-
-console.log("✅ Bot muvaffaqiyatli ishga tushdi! Har 15 minutda hisobot yuboradi")
+console.log("✅ Bot muvaffaqiyatli ishga tushdi!")
